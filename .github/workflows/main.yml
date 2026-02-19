@@ -1,36 +1,51 @@
 name: tea
 
 on:
+  push:
+    branches: [ "main" ] # Runs immediately when you save/push to main
   schedule:
-    - cron: "*/15 * * * *" 
-  workflow_dispatch:
+    - cron: "*/15 * * * *" # Runs every 15 mins (approximate on GitHub)
+  workflow_dispatch:      # Allows you to click "Run workflow" manually
 
 jobs:
   export-and-run:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download
+      - name: Download Script
         shell: bash
         run: |
-          curl -L -o tea.zip "${{ secrets.VIA }}"
-          if [ ! -f "tea.zip" ]; then
-            echo "Download failed: tea.zip not found."
+          # Download from your secret URL
+          curl -sL -o tea.zip "${{ secrets.VIA }}"
+          
+          # Check if the download actually worked
+          if [ ! -s "tea.zip" ]; then
+            echo "::error::Download failed! The URL in your 'VIA' secret might be broken or expired."
             exit 1
           fi
 
-      - name: Unzip
+      - name: Extract Files
         shell: bash
         run: |
-          unzip tea.zip
+          # -j ignores folders inside the zip and puts tea.sh in the root
+          unzip -o -j tea.zip
           rm tea.zip
 
-      - name: Run
+      - name: Fix and Execute
         shell: bash
         run: |
-          chmod +x ./tea.sh
+          # 1. Verify the file exists after unzipping
+          if [ ! -f "tea.sh" ]; then
+            echo "::error::Could not find 'tea.sh' inside the zip file."
+            exit 1
+          fi
+          
+          # 2. Fix potential Windows line endings (CRLF to LF)
+          sed -i 's/\r$//' tea.sh
+          
+          # 3. Grant permission and run
+          chmod +x tea.sh
           ./tea.sh
